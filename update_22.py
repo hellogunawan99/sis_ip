@@ -1,9 +1,11 @@
 import requests
 import mysql.connector
+import os
 
 # ----- STEP 1: Fetch Data from the API -----
-api_url = "http://localhost:8000/devices/jigsaw"
+api_url = os.getenv("API_URL", "http://localhost:8000/devices/jigsaw")
 try:
+    print(f"Fetching device data from API at: {api_url}")
     response = requests.get(api_url, timeout=10)
     response.raise_for_status()
     devices = response.json()   # Expecting a list of dicts with keys "name", "address", "device_type"
@@ -12,15 +14,16 @@ except Exception as e:
     devices = []
 
 # ----- STEP 2: Connect to the MySQL Database -----
-# Replace the below variables with your MySQL connection details
+# Get MySQL connection details from environment variables
 mysql_config = {
-    'user': 'user',
-    'password': 'pass',
-    'host': 'localhost',
-    'port': 3306,
-    'database': 'db',
+    'user': os.getenv("MYSQL_USER", "user"),
+    'password': os.getenv("MYSQL_PASSWORD", "pass"),
+    'host': os.getenv("MYSQL_HOST", "localhost"),
+    'port': int(os.getenv("MYSQL_PORT", "3306")),
+    'database': os.getenv("MYSQL_DATABASE", "db"),
 }
 try:
+    print(f"Connecting to MySQL at {mysql_config['host']}:{mysql_config['port']} with database '{mysql_config['database']}'")
     cnx = mysql.connector.connect(**mysql_config)
     cursor = cnx.cursor()
 except mysql.connector.Error as err:

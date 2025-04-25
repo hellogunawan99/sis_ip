@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  api:
+    image: python:3.11
+    container_name: sis_ip_api
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - MSSQL_DRIVER=ODBC Driver 18 for SQL Server
+      - MSSQL_SERVER=${MSSQL_SERVER:-localhost,1433}
+      - MSSQL_DATABASE=${MSSQL_DATABASE:-db}
+      - MSSQL_USER=${MSSQL_USER:-user}
+      - MSSQL_PASSWORD=${MSSQL_PASSWORD:-pass}
+    command: >
+      bash -c "pip install -r requirements.txt &&
+               apt-get update &&
+               apt-get install -y curl gnupg unixodbc-dev &&
+               curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - &&
+               curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list &&
+               apt-get update &&
+               ACCEPT_EULA=Y apt-get install -y msodbcsql18 &&
+               uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/devices/jigsaw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  updater:
+    image: python:3.11
+    container_name: sis_ip_updater
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - MYSQL_HOST=${MYSQL_HOST:-localhost}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-db}
+      - MYSQL_USER=${MYSQL_USER:-user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-pass}
+      - API_URL=http://api:8000/devices/jigsaw
+      - UPDATE_INTERVAL=300  # Time in seconds (300s = 5 minutes)
+    depends_on:
+      api:
+        condition: service_healthy
+    command: >
+      bash -c "pip install -r requirements.txt &&
+               echo 'Starting updater service with periodic runs every ${UPDATE_INTERVAL:-300} seconds' &&
+               while true; do
+                 echo '-------------------------------------' &&
+                 echo 'Running update_22.py at $$(date)' &&
+                 python3 update_22.py &&
+                 echo 'Sleeping for ${UPDATE_INTERVAL:-300} seconds...' &&
+                 sleep ${UPDATE_INTERVAL:-300};
+               done"
+
